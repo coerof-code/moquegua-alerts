@@ -1,6 +1,6 @@
 """
 Moquegua Alert Dashboard - Professional Enhanced Version
-With PDF export including maps and premium design
+With PDF export including maps and map display
 """
 
 import streamlit as st
@@ -17,7 +17,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image as RLImage
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-import tempfile
+from PIL import Image as PILImage
 
 # Page config
 st.set_page_config(
@@ -30,7 +30,6 @@ st.set_page_config(
 # Custom CSS for professional appearance
 st.markdown("""
 <style>
-    /* Main title styling */
     .main-title {
         text-align: center;
         color: #1f77b4;
@@ -44,7 +43,6 @@ st.markdown("""
         background-clip: text;
     }
     
-    /* Metric cards */
     .metric-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 1.5rem;
@@ -68,7 +66,6 @@ st.markdown("""
         letter-spacing: 1px;
     }
     
-    /* Button styling */
     .stDownloadButton button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -85,22 +82,11 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
     }
     
-    /* Map container */
     .map-container {
         border-radius: 15px;
         overflow: hidden;
         box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         margin: 2rem 0;
-    }
-    
-    /* Alert cards */
-    .alert-card {
-        background: white;
-        border-left: 5px solid #ff4b4b;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -123,71 +109,18 @@ def load_alerts():
         st.error(f"Error loading data: {e}")
         return pd.DataFrame()
 
-# District coordinates
-DISTRICT_COORDS = {
-    'MOQUEGUA': (-17.195, -70.935),
-    'CARUMAS': (-16.780, -70.700),
-    'SAMEGUA': (-17.177, -70.917),
-    'TORATA': (-17.077, -70.846),
-    'SAN CRISTOBAL': (-17.077, -70.846),
-    'CUCHUMBAYA': (-17.100, -70.800),
-    'ILO': (-17.640, -71.338),
-    'EL ALGARROBAL': (-17.600, -71.300),
-    'PACOCHA': (-17.650, -71.350),
-    'OMATE': (-16.670, -70.970),
-    'PUQUINA': (-16.620, -70.950),
-    'UBINAS': (-16.370, -70.850),
-    'CHOJATA': (-16.500, -70.700),
-    'COALAQUE': (-16.550, -70.650),
-    'ICHUÑA': (-16.150, -70.500),
-    'LA CAPILLA': (-16.600, -70.750),
-    'MATALAQUE': (-16.750, -70.900),
-    'QUINISTAQUILLAS': (-16.580, -70.900),
-    'YUNGA': (-16.700, -70.800),
-    'LLOQUE': (-16.650, -70.850),
-    'SAN ANTONIO': (-17.150, -70.900),
-}
+def get_map_path(nro):
+    """Get map image path for alert number"""
+    # Extract number from nro (e.g., "434 (vigente)" -> "434")
+    import re
+    num = re.sub(r'[^0-9]', '', str(nro))
+    map_path = Path(__file__).parent.parent / "data" / "maps" / f"mapa_aviso_{num}.png"
+    return map_path if map_path.exists() else None
 
-def create_map_image(active_alerts):
-    """Create map image for PDF"""
-    # Create map
-    m = folium.Map(
-        location=[-17.195, -70.935],
-        zoom_start=9,
-        tiles='OpenStreetMap'
-    )
-    
-    colors_map = {
-        'ROJO': 'red',
-        'NARANJA': 'orange',
-        'AMARILLO': 'yellow',
-        'VERDE': 'green',
-        'default': 'blue'
-    }
-    
-    # Add markers
-    for distrito in active_alerts['Distrito'].unique():
-        if distrito in DISTRICT_COORDS:
-            lat, lon = DISTRICT_COORDS[distrito]
-            dist_alerts = active_alerts[active_alerts['Distrito'] == distrito]
-            max_nivel = dist_alerts['Nivel'].iloc[0]
-            
-            popup_html = f"<b>{distrito}</b><br>"
-            for _, alert in dist_alerts.iterrows():
-                popup_html += f"{alert['Nivel']}<br>"
-            
-            folium.Marker(
-                location=[lat, lon],
-                popup=folium.Popup(popup_html, max_width=200),
-                icon=folium.Icon(color=colors_map.get(max_nivel, colors_map['default']), icon='info-sign')
-            ).add_to(m)
-    
-    # Save to temp file
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
-        m.save(tmp.name.replace('.png', '.html'))
-        # Note: For production, use selenium to convert HTML to PNG
-        # For now, return path
-        return tmp.name.replace('.png', '.html')
+def image_to_base64(image_path):
+    """Convert image to base64 for embedding"""
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
 
 def create_pdf_report(alerts_df):
     """Generate professional PDF report with maps"""
@@ -216,7 +149,7 @@ def create_pdf_report(alerts_df):
         spaceAfter=20
     )
     
-    # Title with logo/icon
+    # Title
     title = Paragraph("🌦️ REPORTE DE ALERTAS METEOROLÓGICAS", title_style)
     elements.append(title)
     
@@ -224,7 +157,7 @@ def create_pdf_report(alerts_df):
     elements.append(subtitle)
     elements.append(Spacer(1, 0.3*inch))
     
-    # Summary box
+    # Summary
     today = pd.Timestamp.now().normalize()
     active = alerts_df[alerts_df['Fin'] >= today]
     
@@ -247,13 +180,12 @@ def create_pdf_report(alerts_df):
         ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
         ('TOPPADDING', (0, 0), (-1, -1), 15),
         ('GRID', (0, 0), (-1, -1), 2, colors.white),
-        ('ROUNDEDCORNERS', [10, 10, 10, 10]),
     ]))
     
     elements.append(summary_table)
     elements.append(Spacer(1, 0.5*inch))
     
-    # Alerts detail
+    # Alerts detail with maps
     for nro in active['Nro'].unique():
         alert_data = active[active['Nro'] == nro].iloc[0]
         affected = active[active['Nro'] == nro]['Distrito'].unique()
@@ -263,7 +195,7 @@ def create_pdf_report(alerts_df):
         elements.append(alert_title)
         elements.append(Spacer(1, 0.1*inch))
         
-        # Alert details table
+        # Alert details
         details = [
             ['Número de Aviso', alert_data['Nro']],
             ['Nivel de Alerta', alert_data['Nivel']],
@@ -287,22 +219,33 @@ def create_pdf_report(alerts_df):
         # Districts list
         districts_text = ", ".join(sorted(affected))
         elements.append(Paragraph(f"<b>Distritos:</b> {districts_text}", styles['Normal']))
-        elements.append(Spacer(1, 0.4*inch))
+        elements.append(Spacer(1, 0.3*inch))
+        
+        # Add map image if available
+        map_path = get_map_path(nro)
+        if map_path:
+            try:
+                img = RLImage(str(map_path), width=5*inch, height=6*inch)
+                elements.append(img)
+                elements.append(Spacer(1, 0.3*inch))
+            except Exception as e:
+                elements.append(Paragraph(f"<i>Mapa no disponible</i>", styles['Normal']))
+        
+        elements.append(PageBreak())
     
     # Footer
     footer = Paragraph(
         "<i>Sistema Automatizado de Alertas Meteorológicas - SENAMHI</i>",
         ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=TA_CENTER)
     )
-    elements.append(Spacer(1, 0.5*inch))
     elements.append(footer)
     
     doc.build(elements)
     buffer.seek(0)
     return buffer
 
-def create_alert_pdf(alert_data, affected_districts):
-    """Generate professional PDF for individual alert"""
+def create_alert_pdf(alert_data, affected_districts, nro):
+    """Generate professional PDF for individual alert with map"""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch)
     elements = []
@@ -356,6 +299,19 @@ def create_alert_pdf(alert_data, affected_districts):
     
     elements.append(Spacer(1, 0.5*inch))
     
+    # Add map image
+    map_path = get_map_path(nro)
+    if map_path:
+        try:
+            elements.append(Paragraph("<b>MAPA DE DISTRITOS AFECTADOS:</b>", styles['Heading2']))
+            elements.append(Spacer(1, 0.2*inch))
+            img = RLImage(str(map_path), width=5.5*inch, height=6.5*inch)
+            elements.append(img)
+        except Exception as e:
+            elements.append(Paragraph(f"<i>Mapa no disponible</i>", styles['Normal']))
+    
+    elements.append(Spacer(1, 0.5*inch))
+    
     # Footer
     footer = Paragraph(
         f"<i>Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Sistema de Alertas Meteorológicas</i>",
@@ -366,6 +322,31 @@ def create_alert_pdf(alert_data, affected_districts):
     doc.build(elements)
     buffer.seek(0)
     return buffer
+
+# District coordinates
+DISTRICT_COORDS = {
+    'MOQUEGUA': (-17.195, -70.935),
+    'CARUMAS': (-16.780, -70.700),
+    'SAMEGUA': (-17.177, -70.917),
+    'TORATA': (-17.077, -70.846),
+    'SAN CRISTOBAL': (-17.077, -70.846),
+    'CUCHUMBAYA': (-17.100, -70.800),
+    'ILO': (-17.640, -71.338),
+    'EL ALGARROBAL': (-17.600, -71.300),
+    'PACOCHA': (-17.650, -71.350),
+    'OMATE': (-16.670, -70.970),
+    'PUQUINA': (-16.620, -70.950),
+    'UBINAS': (-16.370, -70.850),
+    'CHOJATA': (-16.500, -70.700),
+    'COALAQUE': (-16.550, -70.650),
+    'ICHUÑA': (-16.150, -70.500),
+    'LA CAPILLA': (-16.600, -70.750),
+    'MATALAQUE': (-16.750, -70.900),
+    'QUINISTAQUILLAS': (-16.580, -70.900),
+    'YUNGA': (-16.700, -70.800),
+    'LLOQUE': (-16.650, -70.850),
+    'SAN ANTONIO': (-17.150, -70.900),
+}
 
 # Load data
 alerts_df = load_alerts()
@@ -431,7 +412,7 @@ if page == "🏠 Tiempo Real":
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # PDF Export button - professional design
+            # PDF Export button
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 pdf_buffer = create_pdf_report(active_alerts)
@@ -446,10 +427,9 @@ if page == "🏠 Tiempo Real":
             st.markdown("<br>", unsafe_allow_html=True)
             
             # Map - larger and centered
-            st.markdown('<h2 style="text-align: center; color: #667eea;">📍 Mapa de Distritos Afectados</h2>', unsafe_allow_html=True)
+            st.markdown('<h2 style="text-align: center; color: #667eea;">📍 Mapa Interactivo de Distritos Afectados</h2>', unsafe_allow_html=True)
             st.markdown('<div class="map-container">', unsafe_allow_html=True)
             
-            # Create professional map
             m = folium.Map(
                 location=[-17.195, -70.935],
                 zoom_start=9,
@@ -466,7 +446,6 @@ if page == "🏠 Tiempo Real":
                 'default': 'blue'
             }
             
-            # Add markers
             for distrito in active_alerts['Distrito'].unique():
                 if distrito in DISTRICT_COORDS:
                     lat, lon = DISTRICT_COORDS[distrito]
@@ -487,7 +466,7 @@ if page == "🏠 Tiempo Real":
             st_folium(m, width=None, height=600)
             st.markdown('</div>', unsafe_allow_html=True)
             
-            # Active alerts list
+            # Active alerts list with maps
             st.markdown('<h2 style="text-align: center; color: #667eea; margin-top: 3rem;">🚨 Detalle de Alertas Activas</h2>', unsafe_allow_html=True)
             
             for nro in active_alerts['Nro'].unique():
@@ -505,7 +484,7 @@ if page == "🏠 Tiempo Real":
                         st.markdown(f"_{', '.join(affected)}_")
                     
                     with col2:
-                        alert_pdf = create_alert_pdf(alert_data, affected)
+                        alert_pdf = create_alert_pdf(alert_data, affected, nro)
                         st.download_button(
                             label="📄 Exportar PDF",
                             data=alert_pdf,
@@ -514,6 +493,23 @@ if page == "🏠 Tiempo Real":
                             key=f"pdf_{nro}",
                             use_container_width=True
                         )
+                    
+                    # Display map image
+                    map_path = get_map_path(nro)
+                    if map_path:
+                        st.markdown("---")
+                        st.markdown("### 🗺️ Mapa de Distritos Afectados")
+                        st.image(str(map_path), use_container_width=True)
+                        
+                        # Download map button
+                        with open(map_path, "rb") as file:
+                            st.download_button(
+                                label="📥 Descargar Mapa (PNG)",
+                                data=file,
+                                file_name=f"mapa_{nro.replace(' ', '_')}.png",
+                                mime="image/png",
+                                key=f"map_{nro}"
+                            )
 
 elif page == "📊 Historial":
     st.markdown('<h1 class="main-title">📊 Historial de Alertas</h1>', unsafe_allow_html=True)
