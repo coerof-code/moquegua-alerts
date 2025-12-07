@@ -41,7 +41,8 @@ jobs:
       - name: Install R packages
         run: |
           Rscript -e 'install.packages(c("sf", "dplyr", "httr", "glue", "archive"), repos="https://cloud.r-project.org")'
-          Rscript -e 'install.packages("geoidep", repos="https://geografo.pe/geoidep/drat")'
+          Rscript -e 'install.packages("remotes", repos="https://cloud.r-project.org")'
+          Rscript -e 'remotes::install_github("healthinnovation/geoidep")'
       
       - name: Run alert extraction
         run: |
