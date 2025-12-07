@@ -1,0 +1,12 @@
+# Streamlit dependencies
+streamlit>=1.29.0
+streamlit-folium>=0.15.0
+
+# Data processing
+pandas>=2.0.0
+
+# Visualization
+folium>=0.15.0
+
+# Utilities
+python-dateutil>=2.8.0

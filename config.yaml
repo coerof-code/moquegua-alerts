@@ -1,0 +1,45 @@
+paths:
+  # Rutas de salida para datos y visualizaciones
+  output_csv: "data/alerts.csv"
+  output_maps: "data/maps/"
+  database: "data/alerts.db"
+  logs: "logs/"
+
+schedule:
+  # Horarios de verificación (formato 24h)
+  check_times: 
+    - "08:00"
+    - "11:45"
+    - "17:00"
+  timezone: "America/Lima"
+
+alerts:
+  # Configuración de filtrado de alertas
+  filter_department: "MOQUEGUA"
+  exclude_levels: 
+    - "Nivel 1"  # Excluir geometría de fondo (todo el país)
+  
+map_settings:
+  # Configuración de mapas
+  width: 10
+  height: 12
+  dpi: 300
+  colors:
+    ROJO: "#d32f2f"
+    NARANJA: "#f57c00"
+    AMARILLO: "#fbc02d"
+    default: "#1976d2"
+  background_color: "#f5f5f5"
+  unaffected_color: "#e8e8e8"
+
+database:
+  # Configuración de base de datos
+  type: "sqlite"
+  auto_cleanup_days: 365  # Limpiar alertas más antiguas de 1 año
+
+notifications:
+  # Notificaciones (opcional - para futuro)
+  enabled: false
+  email: ""
+  telegram_bot_token: ""
+  telegram_chat_id: ""

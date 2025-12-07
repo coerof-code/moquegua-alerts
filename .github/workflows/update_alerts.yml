@@ -1,0 +1,55 @@
+name: Update Moquegua Alerts
+
+on:
+  schedule:
+    # 3 times per day (Peru time UTC-5)
+    # 08:00 AM Peru = 13:00 UTC
+    - cron: '0 13 * * *'
+    # 11:45 AM Peru = 16:45 UTC
+    - cron: '45 16 * * *'
+    # 05:00 PM Peru = 22:00 UTC
+    - cron: '0 22 * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  update-alerts:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3.0'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgdal-dev \
+            libgeos-dev \
+            libproj-dev \
+            libudunits2-dev \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev
+      
+      - name: Install R packages
+        run: |
+          Rscript -e 'install.packages(c("sf", "dplyr", "httr", "glue", "archive"), repos="https://cloud.r-project.org")'
+          Rscript -e 'install.packages("geoidep", repos="https://geografo.pe/geoidep/drat")'
+      
+      - name: Run alert extraction
+        run: |
+          Rscript R_scripts/get_moquegua_warnings.R
+      
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions@github.com'
+          git add data/alerts.csv
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update alerts data [$(date +'%Y-%m-%d %H:%M:%S')]" && git push)
